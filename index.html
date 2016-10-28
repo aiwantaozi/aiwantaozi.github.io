@@ -48,9 +48,9 @@
       </nav>
       <nav id="sub-nav">
         
-          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="Flux RSS"></a>
         
-        <a id="nav-search-btn" class="nav-icon" title="Search"></a>
+        <a id="nav-search-btn" class="nav-icon" title="Rechercher"></a>
       </nav>
       <div id="search-form-wrap">
         <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" results="0" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://yoursite.com"></form>
@@ -60,6 +60,85 @@
 </header>
       <div class="outer">
         <section id="main">
+  
+    <article id="post-rails-upgrade" class="article article-type-post" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2016/10/28/rails-upgrade/" class="article-date">
+  <time datetime="2016-10-28T04:34:05.000Z" itemprop="datePublished">2016-10-28</time>
+</a>
+    
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2016/10/28/rails-upgrade/">Ruby on Rails 项目升级</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <p>Rails 4 在性能上有了极大的提升，简述一下在rails 3升级到rails 4的过程。</p>
+<h3 id="Ruby-版本升级"><a href="#Ruby-版本升级" class="headerlink" title="Ruby 版本升级"></a>Ruby 版本升级</h3><p>升级 Ruby 版本，Rails 4 需要 Ruby 2.0 以上的环境运行，需要升级 Ruby的版本，如果使用docker，可以直接修改 Dockerfile</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">$ FROM ruby:2.2.0</div></pre></td></tr></table></figure>
+<h3 id="升级依赖项目"><a href="#升级依赖项目" class="headerlink" title="升级依赖项目"></a>升级依赖项目</h3><p>升级Ruby依赖，修改gemfile删除gem的版本号和清空gemfile.lock里面的内容，接着在gemfile里面锁定这几个gem包的版本，<br>  gem ‘mongoid’,          ‘~&gt; 5.1.3’<br>  gem ‘rails’, ‘~&gt; 4.2.1’<br>  gem ‘active_model_serializers’,   ‘~&gt; 0.10.0’<br>  gem ‘aws-sdk’, ‘~&gt; 1.9.0’<br>  gem ‘mongoid-observers’<br>  删除 debugger<br>  加上 byebug<br>最后运行命令获取其他依赖的版本</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><div class="line">1</div></pre></td><td class="code"><pre><div class="line">$ bundle update</div></pre></td></tr></table></figure>
+<h3 id="修改Application-rb-文件"><a href="#修改Application-rb-文件" class="headerlink" title="修改Application.rb 文件"></a>修改Application.rb 文件</h3><p>删除active_resource/railtie，加上<br>  config.paths.add “lib”, eager_load: true<br>  config.eager_load_paths += %W( app/serializers app/observers app)<br>  config.paths.add “config”, eager_load: true</p>
+<h3 id="Mongoid-相关修改"><a href="#Mongoid-相关修改" class="headerlink" title="Mongoid 相关修改"></a>Mongoid 相关修改</h3><p>如果使用MongoDB，需要做相应的修改，MongoDB相应的Driver MongoId也从3.x升级到5.x，其中MongoId的IO数据大小大大的减少了。</p>
+<h4 id="修改mongoid-yml-文件"><a href="#修改mongoid-yml-文件" class="headerlink" title="修改mongoid.yml 文件"></a>修改mongoid.yml 文件</h4><p>  Session 修改成 client<br><img src="https://gallery.mailchimp.com/cef3e564e39974428cf3fa4ed/images/c05b30db-3cc2-4d61-b621-f64d46354fc8.png" alt=""></p>
+<h4 id="修改MongoId相关代码"><a href="#修改MongoId相关代码" class="headerlink" title="修改MongoId相关代码"></a>修改MongoId相关代码</h4><ol>
+<li><p>代码中的Session 修改成 client</p>
+</li>
+<li><p>修改Moped::BSON::ObjectId =&gt;  BSON::ObjectId, mongoId driver不再使用moped，而是使用mongo driver<br><img src="https://gallery.mailchimp.com/cef3e564e39974428cf3fa4ed/images/791e352c-8a7b-4f1c-bac5-a03472f316ab.png" alt=""></p>
+</li>
+<li><p>修改mongo scope 的表示方式<br><img src="https://gallery.mailchimp.com/cef3e564e39974428cf3fa4ed/images/d081417f-e64d-4820-b772-0d959e36badf.png" alt=""></p>
+</li>
+<li><p>如果使用到了gem包（用来表示枚举类型），可以添加这个属性去控制如果值非法的时候的操作。<br><img src="https://gallery.mailchimp.com/cef3e564e39974428cf3fa4ed/images/dc96396c-26b9-4f8f-a8d4-4173ef147139.png" alt=""></p>
+<p>:default - which sets the value simply to nil<br>:whiny - raises an ArgumentError when trying to set an invalid value<br>:ignore - keeps the existing value</p>
+</li>
+<li>修改 validate to validates,  validates :day, presence: true</li>
+<li>Model.find_and_modify 不存在，可以修改成 Model.upsert<br><a href="https://docs.mongodb.com/ecosystem/tutorial/mongoid-persistence/" target="_blank" rel="external">https://docs.mongodb.com/ecosystem/tutorial/mongoid-persistence/</a></li>
+<li>Model.Aggregate  返回的结果有变化，根据需要使用新方法</li>
+<li>不再能直接取model的first和last，需要修改Model.Last 替换成 Model.all.to_all.last<br><img src="https://gallery.mailchimp.com/72a9664119bf8b1613bbc7a02/images/49bdbe56-e2ea-4aa4-92c6-807d1b30de53.jpg" alt=""></li>
+<li>Mongoid的bulk insert 函数发生了变化，用insert_many 替换insert</li>
+</ol>
+<h3 id="Rails相关的修改"><a href="#Rails相关的修改" class="headerlink" title="Rails相关的修改"></a>Rails相关的修改</h3><ol>
+<li>gem ‘protected_attributes’<br>Rails 4.0 has removed attr_accessible and attr_protected feature in favor of Strong Parameters. You can usethe Protected Attributes gem for a smooth upgrade path.</li>
+<li>如果有用到header，header的key会有变化，比如说api_key 被rails框架默认改成了http_api_key</li>
+<li>Add secret key</li>
+<li>Seriliazer 修改</li>
+<li>Update route, rails 4 Add Routing Concerns to declare common routes<br>Add config/routes.rb file and could add this to the file to support multi route file<figure class="highlight bash"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div></pre></td><td class="code"><pre><div class="line"> class ActionDispatch::Routing::Mapper</div><div class="line">   def draw(routes_name)</div><div class="line">     instance_<span class="built_in">eval</span>(File.read(Rails.root.join(<span class="string">"config/routes/#&#123;routes_name&#125;.rb"</span>)))</div><div class="line">   end</div><div class="line"> end</div><div class="line"> </div><div class="line"> Web::Application.routes.draw <span class="keyword">do</span></div><div class="line">   <span class="comment"># Loads config/routes/common.rb</span></div><div class="line">   draw :route_api</div><div class="line">   <span class="comment"># Loads config/routes/another.rb</span></div><div class="line">   draw :route_dashboard</div><div class="line"> </div><div class="line">   draw :route_internal</div><div class="line"> </div><div class="line">   draw :route_web_team</div><div class="line">end</div></pre></td></tr></table></figure>
+</li>
+</ol>
+<h3 id="Devise-相关修改"><a href="#Devise-相关修改" class="headerlink" title="Devise 相关修改"></a>Devise 相关修改</h3><p>如果有用到Devise做登陆认证，需要修改Devise相关代码。</p>
+<ol>
+<li>Devise::TestHelpers  =&gt; Devise::Test::ControllerHelpers</li>
+<li><em>*</em> NoMethodError Exception: undefined method `reset_password_token’ for User:Class<br>把 User.reset_password_token<br>替换成 raw, enc = Devise.token_generator.generate(User, :reset_password_token)</li>
+<li>reset_password! =&gt; reset_password</li>
+</ol>
+<h3 id="Rspec-相关修改"><a href="#Rspec-相关修改" class="headerlink" title="Rspec 相关修改"></a>Rspec 相关修改</h3><ol>
+<li>升级 Rspec spec upgrade <a href="https://www.relishapp.com/rspec/rspec-rails/docs/upgrade" target="_blank" rel="external">https://www.relishapp.com/rspec/rspec-rails/docs/upgrade</a></li>
+<li>be_true =&gt; be true</li>
+<li>Raise error 最好有个确定的error，不要用通用的Exception</li>
+</ol>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://yoursite.com/2016/10/28/rails-upgrade/" data-id="ciutfv2h80000b9rgoscyhifo" class="article-share-link">Partager</a>
+      
+      
+    </footer>
+  </div>
+  
+</article>
+
+
   
     <article id="post-rancher" class="article article-type-post" itemscope itemprop="blogPost">
   <div class="article-meta">
@@ -91,7 +170,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2016/08/03/rancher/" data-id="ciregystu0000301jcn3o9cja" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2016/08/03/rancher/" data-id="ciutfv2hw0004b9rgnewgclf6" class="article-share-link">Partager</a>
       
       
     </footer>
@@ -131,7 +210,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2016/08/03/key-value-database/" data-id="ciregysu20002301jjyrgj5wj" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2016/08/03/key-value-database/" data-id="ciutfv2hn0001b9rgm0aldods" class="article-share-link">Partager</a>
       
       
     </footer>
@@ -168,7 +247,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2016/08/02/miroservice知识图谱/" data-id="ciregysu70003301j4ftmcwqa" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2016/08/02/miroservice知识图谱/" data-id="ciutfv2ht0003b9rgy0n1aqbe" class="article-share-link">Partager</a>
       
       
     </footer>
@@ -213,7 +292,7 @@
       
     </div>
     <footer class="article-footer">
-      <a data-url="http://yoursite.com/2016/08/02/hello-world/" data-id="ciregystz0001301jqtjllwmo" class="article-share-link">Share</a>
+      <a data-url="http://yoursite.com/2016/08/02/hello-world/" data-id="ciutfv2hq0002b9rg075xp2o8" class="article-share-link">Partager</a>
       
       
     </footer>
@@ -240,7 +319,7 @@
   <div class="widget-wrap">
     <h3 class="widget-title">Archives</h3>
     <div class="widget">
-      <ul class="archive-list"><li class="archive-list-item"><a class="archive-list-link" href="/archives/2016/08/">August 2016</a></li></ul>
+      <ul class="archive-list"><li class="archive-list-item"><a class="archive-list-link" href="/archives/2016/10/">October 2016</a></li><li class="archive-list-item"><a class="archive-list-link" href="/archives/2016/08/">August 2016</a></li></ul>
     </div>
   </div>
 
@@ -248,9 +327,13 @@
   
     
   <div class="widget-wrap">
-    <h3 class="widget-title">Recent Posts</h3>
+    <h3 class="widget-title">Articles récents</h3>
     <div class="widget">
       <ul>
+        
+          <li>
+            <a href="/2016/10/28/rails-upgrade/">Ruby on Rails 项目升级</a>
+          </li>
         
           <li>
             <a href="/2016/08/03/rancher/">Rancher</a>
@@ -281,7 +364,7 @@
   <div class="outer">
     <div id="footer-info" class="inner">
       &copy; 2016 John Doe<br>
-      Powered by <a href="http://hexo.io/" target="_blank">Hexo</a>
+      Propulsé by <a href="http://hexo.io/" target="_blank">Hexo</a>
     </div>
   </div>
 </footer>
